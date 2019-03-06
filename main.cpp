@@ -32,6 +32,7 @@
     #define TEX_IMG_NAME "statue.jpg"
 #endif
 
+
 class HelloTriangleApplication
 {
 public:
@@ -44,6 +45,8 @@ public:
     }
 
 private:
+    // Camera struct with MVP matrices
+    // Aligned to 16 bytes per Vulkan spec
     struct Camera
     {
         alignas(16) glm::mat4 M;
@@ -51,6 +54,7 @@ private:
         alignas(16) glm::mat4 P;
     };
 
+    // Simple vertex data struct
     struct Vertex
     {
         glm::vec2 pos;
@@ -58,6 +62,8 @@ private:
         glm::vec3 color;
     };
 
+    // Struct to store Vulkan queue family
+    // with similar graphics and presentation support
     struct QueueFamilyIndices
     {
         std::optional<uint32_t> graphicsFamily;
@@ -69,6 +75,7 @@ private:
         }
     };
 
+    // Search for a queue family matching QueueFamilyIndices' criterion
     QueueFamilyIndices findQueueFamilies (VkPhysicalDevice device)
     {
         QueueFamilyIndices indices;
@@ -78,10 +85,9 @@ private:
         std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
         vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
-        int i = 0;
-        for (const auto& queueFamily : queueFamilies)
+        for (uint32_t i = 0; i < queueFamilyCount; i++)
         {
-            if (queueFamily.queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            if (queueFamilies[i].queueCount > 0 && queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
             {
                 indices.graphicsFamily = i;
             }
@@ -89,7 +95,7 @@ private:
             VkBool32 presentSupport = false;
             vkGetPhysicalDeviceSurfaceSupportKHR (device, i, surface, &presentSupport);
 
-            if (queueFamily.queueCount > 0 && presentSupport)
+            if (queueFamilies[i].queueCount > 0 && presentSupport)
                 indices.presentFamily = i;
 
             if (indices.isComplete ())
@@ -101,6 +107,7 @@ private:
         return indices;
     }
 
+    // copy a buffer of memory into a VkImage
     void copyBufferToImage (VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
     {
         VkCommandBuffer commandBuffer = beginSingleTimeCommands ();
@@ -130,10 +137,10 @@ private:
         endSingleTimeCommands (commandBuffer);
     }
 
+    // transition the layout of an image
+    // different layouts for different scenarious, i.e device copies or shader reads
     void transitionImageLayout (VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
     {
-        VkCommandBuffer commandBuffer = beginSingleTimeCommands ();
-
         VkImageMemoryBarrier barrier = {};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         barrier.oldLayout = oldLayout;
@@ -163,7 +170,7 @@ private:
         }
         else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
         {
-            // otherwise we're going from device memory to something the frag shader can use
+            // otherwise we're going from device memory to something the frag shader can read
             barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
             barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
@@ -174,6 +181,9 @@ private:
         {
             throw std::invalid_argument ("unsupported layout transition!");
         }
+
+        // Single command queue to a pipeline stage transition
+        VkCommandBuffer commandBuffer = beginSingleTimeCommands ();
 
         vkCmdPipelineBarrier (
             commandBuffer,
@@ -187,6 +197,7 @@ private:
         endSingleTimeCommands (commandBuffer);
     }
 
+    // create a Vulkan image per the specifications
     void createImage (uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage* outImage, VkDeviceMemory* outMemory)
     {
         VkImageCreateInfo imageInfo = {};
@@ -221,6 +232,7 @@ private:
         vkBindImageMemory (logicalDevice, *outImage, *outMemory, 0);
     }
 
+    // create an image view for the supplied image
     VkImageView createImageView (VkImage image, VkFormat format)
     {
         VkImageViewCreateInfo viewInfo = {};
@@ -241,7 +253,7 @@ private:
         return imageView;
     }
 
-
+    // allocate a buffer of memory (two structs to fill - VKBuffer and VkBufferMemory)
     void createBuffer (VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* outBuffer, VkDeviceMemory* outMemory)
     {
         VkBufferCreateInfo bufferInfo = {};
@@ -266,6 +278,7 @@ private:
         vkBindBufferMemory (logicalDevice, *outBuffer, *outMemory, 0);
     }
 
+    // use our command queue to execute a buffer copy
     void copyBuffer (VkBuffer srcBuf, VkBuffer dstBuf, VkDeviceSize size)
     {
         VkCommandBuffer commandBuffer = beginSingleTimeCommands ();
@@ -277,6 +290,7 @@ private:
         endSingleTimeCommands (commandBuffer);
     }
 
+    // find our device's memory type index best for type and properties
     uint32_t findMemoryType (uint32_t typeFilter, VkMemoryPropertyFlags properties)
     {
         VkPhysicalDeviceMemoryProperties memProps;
@@ -290,6 +304,8 @@ private:
         return 0;
     }
 
+    // utility function to begin a command queue 
+    // that executes a single command
     VkCommandBuffer beginSingleTimeCommands ()
     {
         VkCommandBufferAllocateInfo allocInfo = {};
@@ -310,6 +326,8 @@ private:
         return commandBuffer;
     }
 
+    // end our single time command queue 
+    // (does it matter that it's a one time use?)
     void endSingleTimeCommands (VkCommandBuffer commandBuffer)
     {
         vkEndCommandBuffer (commandBuffer);
@@ -325,6 +343,7 @@ private:
         vkFreeCommandBuffers (logicalDevice, commandPool, 1, &commandBuffer);
     }
 
+    // struct to cache a physical device's swap chain capabilities
     struct SwapChainSupportDetails
     {
         VkSurfaceCapabilitiesKHR capabilities;
@@ -332,6 +351,7 @@ private:
         std::vector<VkPresentModeKHR> presentModes;
     };
 
+    // fill in the above struct for a physical device
     SwapChainSupportDetails querySwapChainSupport (VkPhysicalDevice device)
     {
         SwapChainSupportDetails details;
@@ -359,12 +379,15 @@ private:
         return details;
     }
 
+    // choose the beset available surface format
     VkSurfaceFormatKHR chooseSwapSurfaceFormat (const std::vector<VkSurfaceFormatKHR>& availableFormats)
     {
+        // undefined? use 8 bit SBGR
         if (availableFormats.size () == 1 && availableFormats[0].format == VK_FORMAT_UNDEFINED)
         {
             return { VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
         }
+        // otherwise try and find that format
         for (const auto& availableFormat : availableFormats)
         {
             if (availableFormat.format == VK_FORMAT_B8G8R8A8_UNORM && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
@@ -373,15 +396,19 @@ private:
             }
         }
 
+        // not found? use the first available format
         return availableFormats.front ();
     }
 
+    // choose a present mode for the swap chain
     VkPresentModeKHR chooseSwapPresentMode (std::vector<VkPresentModeKHR> availablePresentModes)
     {
+        // prefer mailbox for performance, use FIFO otherwise (always supported)
         auto it = std::find (availablePresentModes.begin (), availablePresentModes.end (), VK_PRESENT_MODE_MAILBOX_KHR);
         return (it == availablePresentModes.end ()) ? VK_PRESENT_MODE_FIFO_KHR : *it;
     }
 
+    // use GLFW to get our window's extent (which we'll use to size surfaces)
     VkExtent2D chooseSwapExtent (const VkSurfaceCapabilitiesKHR* capabilities)
     {
         if (capabilities->currentExtent.width == std::numeric_limits<uint32_t>::max ())
@@ -393,6 +420,7 @@ private:
         return { (uint32_t) width, (uint32_t) height };
     }
 
+    // read a binary file with the STL
     static std::vector<char> readFile (const std::string& fileName)
     {
         std::ifstream file (fileName, std::ios::ate | std::ios::binary);
@@ -407,6 +435,7 @@ private:
         return fileBuf;
     }
 
+    // read pre-compiled shader binary SPV files
     VkShaderModule createShaderModule (const std::vector<char>& code)
     {
         VkShaderModuleCreateInfo createInfo = {};
@@ -421,6 +450,7 @@ private:
         return shaderModule;
     }
 
+    // validation layers
     const std::vector<const char*> validationLayers = {
         "VK_LAYER_LUNARG_standard_validation"
     };
@@ -431,6 +461,8 @@ private:
     const bool enableValidationLayers = true;
 #endif
 
+    // ensure that we can use validation
+    // (aren't swap chainsa n extension we care about?)
     std::vector<const char*> getRequiredExtensions ()
     {
         uint32_t glfwExtensionCount = 0;
@@ -454,16 +486,14 @@ private:
         void* pUserData)
     {
         if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
-        {
-
-        }
-
+            throw std::runtime_error (pCallbackData->pMessage);
 
         std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
 
         return VK_FALSE;
     }
 
+    // create a debug messenger using the extension function
     static VkResult CreateDebugUtilsMessengerEXT (VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger)
     {
         auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr (instance, "vkCreateDebugUtilsMessengerEXT");
@@ -477,6 +507,7 @@ private:
         }
     }
 
+    // destroy a debug messenger using the extension function
     void DestroyDebugUtilsMessengerEXT (VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator)
     {
         auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr (instance, "vkDestroyDebugUtilsMessengerEXT");
@@ -486,6 +517,7 @@ private:
         }
     }
 
+    // initialize our test debug messenger
     VkDebugUtilsMessengerEXT debugMessenger;
     void setupDebugMessenger ()
     {
@@ -505,9 +537,11 @@ private:
         }
     }
 
+    // Window parameters
     const int WIDTH = 800;
     const int HEIGHT = 600;
 
+    // use GLFW to create a window
     GLFWwindow* window;
     void initWindow ()
     {
@@ -520,6 +554,7 @@ private:
         glfwSetFramebufferSizeCallback (window, framebufferResizeCallback);
     }
 
+    // called any time GLFW notices the window has been resized
     bool framebufferResized = false;
     static void framebufferResizeCallback (GLFWwindow* window, int width, int height)
     {
@@ -527,6 +562,7 @@ private:
         app->framebufferResized = true;
     }
 
+    // create our Vulkan runtime instance
     VkInstance instance;
     void createinstance ()
     {
@@ -574,6 +610,7 @@ private:
         }
     }
 
+    // use a GLFW Vulkan API to get the window surface
     VkSurfaceKHR surface;
     void createSurface ()
     {
@@ -581,6 +618,7 @@ private:
             throw std::runtime_error ("failed to create window surface");
     }
 
+    // pick a physical device for Vulkan
     VkPhysicalDevice physicalDevice;
     void pickPhysicalDevice ()
     {
@@ -610,10 +648,12 @@ private:
         }
     }
 
+    // we need swapchain support
     std::vector<const char*> deviceExtensions = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
 
+    // verify if a device suits our needs (does it have swapchain support?)
     bool isDeviceSuitable (VkPhysicalDevice device)
     {
         QueueFamilyIndices indices = findQueueFamilies (device);
@@ -632,6 +672,7 @@ private:
         return indices.isComplete () && deviceExtensionsSupported && isSwapChainAdequate && supportedFeatures.samplerAnisotropy;
     }
 
+    // utlity function to check for our required physical device extension
     bool checkDeviceExtensionSupport (VkPhysicalDevice device)
     {
         uint32_t extensionCount;
@@ -652,11 +693,13 @@ private:
         return false;
     }
 
+    // create the Vulkan logical device using our physical device
     VkQueue graphicsQueue;
     VkQueue presentQueue;
     VkDevice logicalDevice;
     void createLogicalDevice ()
     {
+        // check queue support and make our queue
         QueueFamilyIndices indices = findQueueFamilies (physicalDevice);
         std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
         std::set<uint32_t> uniqueQueueFamilies{ indices.graphicsFamily.value (), indices.presentFamily.value () };
@@ -672,6 +715,7 @@ private:
             queueCreateInfos.push_back (queueCreateInfo);
         }
 
+        // create our device - enable anisotropy for texturing later on
         VkDeviceCreateInfo createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         createInfo.queueCreateInfoCount = (uint32_t) queueCreateInfos.size ();
@@ -698,10 +742,13 @@ private:
         if (vkCreateDevice (physicalDevice, &createInfo, nullptr, &logicalDevice) != VK_SUCCESS)
             throw std::runtime_error ("failed to create logical device!");
 
+        // use our queue family indices to get handles to the graphics and presentation queues
         vkGetDeviceQueue (logicalDevice, indices.graphicsFamily.value (), 0, &graphicsQueue);
         vkGetDeviceQueue (logicalDevice, indices.presentFamily.value (), 0, &presentQueue);
     }
 
+    // create our swapchain per our physical and logical device specifications
+    // optionally supply an old swapchain - see recreateSwapChain for details
     VkSwapchainKHR swapChain;
     std::vector<VkImage> swapChainImages;
     VkFormat swapChainImageFormat;
@@ -719,7 +766,8 @@ private:
         uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
         if (swapChainSupport.capabilities.maxImageCount > 0)
             imageCount = std::min (imageCount, swapChainSupport.capabilities.maxImageCount);
-
+        
+        // were using this chain to put images (colors) on the screen
         VkSwapchainCreateInfoKHR createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         createInfo.surface = surface;
@@ -768,6 +816,7 @@ private:
         return ret;
     }
 
+    // Create image views for each element of our swap chain
     std::vector<VkImageView> swapChainImageViews;
     void createImageViews ()
     {
@@ -775,9 +824,11 @@ private:
             swapChainImageViews.push_back (createImageView (swapChainImages[i], swapChainImageFormat));
     }
 
+    // construct a single render pass to generate our image
     VkRenderPass renderPass;
     void createRenderPass ()
     {
+        // we only care about a color pass
         VkAttachmentDescription colorAttachment = {};
         colorAttachment.format = swapChainImageFormat;
         colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -818,6 +869,9 @@ private:
         renderPassInfo.pDependencies = &dependency;
     }
 
+    // create a descriptor set for our pipeline
+    // this is used to describe our two uniforms - 
+    // our MVP matrix and our image sampler
     VkDescriptorSetLayout descriptorSetLayout;
     void createDescriptorSetLayout ()
     {
@@ -847,10 +901,13 @@ private:
             throw std::runtime_error ("failed to create descriptor set layout!");
     }
 
+    // create our graphics pipeline
     VkPipelineLayout pipelineLayout;
     VkPipeline graphicsPipeline;
     void createGraphicsPipeline ()
     {
+        // construct the vertex and fragment shader stages
+        // (shaders must be precompiled - Vulkan has a libary to do this in code)
         VkShaderModule vertShader = createShaderModule (readFile (VERT_SHADER_NAME));
         VkShaderModule fragShader = createShaderModule (readFile (FRAG_SHADER_NAME));
 
@@ -873,6 +930,7 @@ private:
         bindingDescription.stride = sizeof (Vertex);
         bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
+        // three attributes - positionm, texCoord, color
         VkVertexInputAttributeDescription attributeDescriptions[3];
         attributeDescriptions[0].binding = 0;
         attributeDescriptions[0].location = 0;
@@ -920,6 +978,7 @@ private:
         viewportState.scissorCount = 1;
         viewportState.pScissors = &scissor;
 
+        // rasterization (so we can draw our square)
         VkPipelineRasterizationStateCreateInfo rasterizer = {};
         rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
         rasterizer.depthClampEnable = VK_FALSE;
@@ -929,20 +988,14 @@ private:
         rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
         rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         rasterizer.depthBiasEnable = VK_FALSE;
-        rasterizer.depthBiasConstantFactor = 0.0f; // Optional
-        rasterizer.depthBiasClamp = 0.0f; // Optional
-        rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
 
-                                                // disabled multisampling
+        // disabled multisampling (TODO)
         VkPipelineMultisampleStateCreateInfo multisampling = {};
         multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
         multisampling.sampleShadingEnable = VK_FALSE;
         multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-        multisampling.minSampleShading = 1.0f; // Optional
-        multisampling.pSampleMask = nullptr; // Optional
-        multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
-        multisampling.alphaToOneEnable = VK_FALSE; // Optional
 
+        // color blend specifications - alpha blend [0, 1]
         VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
         colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
         colorBlendAttachment.blendEnable = VK_FALSE;
@@ -998,6 +1051,7 @@ private:
         vkDestroyShaderModule (logicalDevice, fragShader, nullptr);
     }
 
+    // create frame buffers for our swap chain image views
     std::vector<VkFramebuffer> swapChainFrameBuffers;
     void createFrameBuffers ()
     {
@@ -1020,6 +1074,8 @@ private:
         }
     }
 
+    // construc the Vulkan command pool
+    // this gets shared by all of our command buffers - we could make separate pool...
     VkCommandPool commandPool;
     void createCommandPool ()
     {
@@ -1033,10 +1089,12 @@ private:
             throw std::runtime_error ("failed to create command pool");
     }
 
+    // Create a texture image
     VkImage textureImage;
     VkDeviceMemory textureImageMemory;
     void createTextureImage ()
     {
+        // use STB to load an image file
         int texWidth, texHeight, texChannels;
         std::string texName = TEX_IMG_NAME;
         stbi_uc* pixels = stbi_load (texName.c_str (), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
@@ -1045,10 +1103,13 @@ private:
         if (pixels == nullptr)
             throw std::runtime_error ("failed to load texture image " + texName);
 
+        // create our staging buffer
         VkBuffer stagingBuffer;
         VkDeviceMemory stagingBufferMemory;
         createBuffer (imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &stagingBuffer, &stagingBufferMemory);
 
+        // map our staging buffer memory and copy the image
+        // (can Vulkan map the STB image's memory directly?)
         void* pixelData;
         vkMapMemory (logicalDevice, stagingBufferMemory, 0, imageSize, 0, &pixelData);
         memcpy (pixelData, pixels, (size_t) imageSize);
@@ -1056,6 +1117,7 @@ private:
 
         stbi_image_free (pixels);
 
+        // create image, transfer to device texture image, transition again for shader reads
         createImage (texWidth, texHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &textureImage, &textureImageMemory);
 
         transitionImageLayout (textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -1067,12 +1129,14 @@ private:
         vkFreeMemory (logicalDevice, stagingBufferMemory, nullptr);
     }
 
+    // create an image view for our texture image so it can be used in the pipeline
     VkImageView textureImageView;
     void createTextureImageView ()
     {
         textureImageView = createImageView (textureImage, VK_FORMAT_R8G8B8A8_UNORM);
     }
 
+    // create a texture sampler
     VkSampler textureSampler;
     void createTextureSampler ()
     {
@@ -1104,11 +1168,13 @@ private:
             throw std::runtime_error ("failed to create texture sampler!");
     }
 
+    // create our vertex buffer, containing per vertex attribute data
     const std::vector<Vertex> vertices = {
-        {{-0.5f, -0.5f}, {1.0f, 0.0f}  , {1.0f, 0.0f, 0.0f}},
-    {{0.5f, -0.5f},    {0.0f, 0.0f} , {0.0f, 1.0f, 0.0f}},
-    {{0.5f, 0.5f},      {0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
-    {{-0.5f, 0.5f},    {1.0f, 1.0f} , {1.0f, 1.0f, 1.0f}}
+        // pos            tex           color 
+        {{-0.5f, -0.5f}, {1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+        {{0.5f, -0.5f},  {0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+        {{0.5f, 0.5f},   {0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
+        {{-0.5f, 0.5f},  {1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}}
     };
     VkBuffer vertexBuffer;
     VkDeviceMemory vertexBufferMemory;
@@ -1133,6 +1199,7 @@ private:
         vkFreeMemory (logicalDevice, stagingMemory, nullptr);
     }
 
+    // construct our index buffer for drawing our square
     const std::vector<uint16_t> indices = {
         0, 1, 2, 2, 3, 0
     };
@@ -1158,6 +1225,7 @@ private:
         vkFreeMemory (logicalDevice, stagingMemory, nullptr);
     }
 
+    // create a uniform buffer memory block for each swap chain image
     std::vector<VkBuffer> uniformBuffers;
     std::vector<VkDeviceMemory> uniformBufferMemory;
     void createUniformBuffers ()
@@ -1171,6 +1239,7 @@ private:
             createBuffer (bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &uniformBuffers[i], &uniformBufferMemory[i]);
     }
     
+    // create a descriptor pool for our MVP matrix and texture sampler
     VkDescriptorPool descriptorPool;
     void createDescriptorPool ()
     {
@@ -1190,6 +1259,7 @@ private:
             throw std::runtime_error ("failed to create descriptor pool!");
     }
 
+    // create a descriptor set for each of our images
     std::vector<VkDescriptorSet> descriptorSets;
     void createDescriptorSets ()
     {
@@ -1204,19 +1274,16 @@ private:
         if (vkAllocateDescriptorSets (logicalDevice, &allocInfo, descriptorSets.data ()) != VK_SUCCESS)
             throw std::runtime_error ("failed to allocate descriptor sets!");
 
+        // we need two descriptor sets for our two uniforms
         for (size_t i = 0; i < swapChainImages.size (); i++)
         {
+            VkWriteDescriptorSet descriptorWriteSets[2] = {};
+
+            // prepare to write matrix
             VkDescriptorBufferInfo bufferInfo = {};
             bufferInfo.buffer = uniformBuffers[i];
             bufferInfo.offset = 0;
             bufferInfo.range = sizeof (Camera);
-
-            VkDescriptorImageInfo imageInfo = {};
-            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            imageInfo.imageView = textureImageView;
-            imageInfo.sampler = textureSampler;
-
-            VkWriteDescriptorSet descriptorWriteSets[2] = {};
 
             descriptorWriteSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             descriptorWriteSets[0].dstSet = descriptorSets[i];
@@ -1225,6 +1292,12 @@ private:
             descriptorWriteSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
             descriptorWriteSets[0].descriptorCount = 1;
             descriptorWriteSets[0].pBufferInfo = &bufferInfo;
+
+            // prepare to wrtie sampler
+            VkDescriptorImageInfo imageInfo = {};
+            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfo.imageView = textureImageView;
+            imageInfo.sampler = textureSampler;
 
             descriptorWriteSets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             descriptorWriteSets[1].dstSet = descriptorSets[i];
@@ -1238,6 +1311,7 @@ private:
         }
     }
 
+    // create our per-image command buffers
     std::vector<VkCommandBuffer> commandBuffers;
     void createCommandBuffers ()
     {
@@ -1251,6 +1325,7 @@ private:
         if (vkAllocateCommandBuffers (logicalDevice, &allocInfo, commandBuffers.data ()) != VK_SUCCESS)
             throw std::runtime_error ("failed to allocate command buffers!");
 
+        // record each image's command buffer
         for (size_t i = 0; i < commandBuffers.size (); i++)
         {
             VkCommandBufferBeginInfo beginInfo = {};
@@ -1272,20 +1347,28 @@ private:
             renderPassInfo.clearValueCount = 1;
             renderPassInfo.pClearValues = &clearColor;
 
+            // begin a render pass
+            // clear the color to black
             vkCmdBeginRenderPass (commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+            // bind our graphics pipeline
             vkCmdBindPipeline (commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
+            // bind our vertex buffers
             VkBuffer vertexBuffers[] = { vertexBuffer };
             VkDeviceSize offsets[] = { 0 };
             vkCmdBindVertexBuffers (commandBuffers[i], 0, 1, vertexBuffers, offsets);
 
+            // bind our index buffer
             vkCmdBindIndexBuffer (commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
+            // bind our uniform buffers
             vkCmdBindDescriptorSets (commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[i], 0, nullptr);
 
+            // draw
             vkCmdDrawIndexed (commandBuffers[i], (uint32_t) indices.size (), 1, 0, 0, 0);
 
+            // end render pass
             vkCmdEndRenderPass (commandBuffers[i]);
 
             if (vkEndCommandBuffer (commandBuffers[i]) != VK_SUCCESS)
@@ -1293,11 +1376,16 @@ private:
         }
     }
     
+    // use these objects to synchronize host command with device interactions
     const int MAX_FRAMES_IN_FLIGHT = 2;
 
     struct RenderSync
     {
+        // semaphores for when a host image is available 
+        // and a device render has finished
         VkSemaphore imageAvailable, renderFinished;
+        
+        // use this fence to prevent more than MAX_FRAMES_IN_FLIGHT from building up
         VkFence inFlightFence;
     };
     std::vector<RenderSync> renderSyncs;
@@ -1323,6 +1411,7 @@ private:
         }
     }
 
+    // init vulkan - see above functions
     void initVulkan ()
     {
         createinstance ();
@@ -1353,10 +1442,11 @@ private:
     size_t currentFrame = 0;
     void drawFrame ()
     {
+        // get render sync, wait for inflight fences to let us through
         auto& renderSync = renderSyncs[currentFrame];
-
         vkWaitForFences (logicalDevice, 1, &renderSync.inFlightFence, VK_TRUE, std::numeric_limits<uint64_t>::max ());
 
+        // get the next image, possibly recreate the swap chain if the frame is out of date
         uint32_t imageIndex;
         VkResult result = vkAcquireNextImageKHR (logicalDevice, swapChain, std::numeric_limits<uint64_t>::max (), renderSync.imageAvailable, VK_NULL_HANDLE, &imageIndex);
         switch (result)
@@ -1371,8 +1461,10 @@ private:
             throw std::runtime_error ("failed to acquire swapchain image!");
         }
 
+        // update our uniforms (rotate MVP)
         updateUniformBuffers (imageIndex);
 
+        // prepare to submit our render pass command buffer
         VkSubmitInfo submitInfo = {};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -1405,8 +1497,10 @@ private:
         presentInfo.pImageIndices = &imageIndex;
         presentInfo.pResults = nullptr;
 
+        // present a complete image
         result = vkQueuePresentKHR (presentQueue, &presentInfo);
 
+        // maybe handle a resize here
         if (framebufferResized)
             result = VK_ERROR_OUT_OF_DATE_KHR;
 
@@ -1422,9 +1516,11 @@ private:
             throw std::runtime_error ("failed to acquire swapchain image!");
         }
 
+        // advance frame count
         currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
+    // rotate M matrix over time
     void updateUniformBuffers (uint32_t currentImage)
     {
         static auto startTime = std::chrono::high_resolution_clock::now ();

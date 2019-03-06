@@ -3,9 +3,9 @@
 
 layout(binding = 0) uniform Camera 
 {
-	mat4 M;
-	mat4 V;
-	mat4 P;
+	mat4 M; // Model
+	mat4 V; // View
+	mat4 P; // Projection
 } cam;
 
 layout(location = 0) in vec2 inPosition;
