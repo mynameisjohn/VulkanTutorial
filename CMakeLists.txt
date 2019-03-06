@@ -14,5 +14,5 @@ set(STB_DIR $ENV{SDK}/stb)
 include_directories(${Vulkan_INCLUDE_DIRS} ${GLM_DIR} ${STB_DIR} ${GLFW_DIR}/include)
 link_directories(${GLFW_DIR}/lib)
 
-add_executable(VulkanTutorial main.cpp)
+add_executable(VulkanTutorial main.cpp shader.vert shader.frag)
 target_link_libraries(VulkanTutorial ${Vulkan_LIBRARIES} glfw3)
